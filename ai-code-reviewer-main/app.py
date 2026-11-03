@@ -1,6 +1,8 @@
 import streamlit as st
+from auth_ui import render_auth_page
 from reviewer import review_code
 from complexity import analyze_complexity
+from history import create_history_table,save_review, get_user_history
 from utils import (
     LANGUAGE_CONFIG,
     score_color,
@@ -17,11 +19,34 @@ except ImportError:
 
 st.set_page_config(page_title="AI Code Reviewer", page_icon="🔍", layout="wide")
 
+# Initialize Review History Database
+create_history_table()
+
+# Login Authentication
+if not render_auth_page():
+    st.stop()
+
 st.title("🔍 AI Code Reviewer")
 st.caption("Paste your code, get instant AI feedback — bugs, improvements, and a complexity score.")
 
 with st.sidebar:
     st.header("⚙️ Settings")
+        # User Profile
+    user = st.session_state.get("user", {})
+
+    st.success(f"Welcome, {user.get('name', 'User')}")
+
+    st.caption(user.get("email", ""))
+
+    # Logout Button
+    if st.button("Logout", use_container_width=True):
+
+        st.session_state.logged_in = False
+        st.session_state.pop("user", None)
+
+        st.rerun()
+
+    st.markdown("---")
     language = st.selectbox("Language", list(LANGUAGE_CONFIG.keys()))
     st.markdown("---")
     st.markdown(
@@ -76,6 +101,18 @@ if run_clicked:
             st.session_state.review_result = review_code(code_input, language)
             st.session_state.complexity_result = analyze_complexity(code_input, language)
 
+            # Save review history
+            user = st.session_state.get("user")
+
+            if user:
+                save_review(
+                    user["id"],
+                    language,
+                    code_input,
+                    st.session_state.review_result,
+                    st.session_state.complexity_result
+                )
+
 
 # ---------- Results ----------
 result = st.session_state.review_result
@@ -91,19 +128,32 @@ if result:
         if result.get("summary"):
             st.info(result["summary"])
 
-        tab_bugs, tab_improve, tab_complexity, tab_score, tab_diff = st.tabs(
-            ["🐛 Bugs", "💡 Improvements", "⚙️ Complexity", "📊 Score", "🔀 Before/After"]
+        tab_bugs, tab_improve, tab_complexity, tab_score, tab_diff, tab_history = st.tabs(
+            ["🐛 Bugs", "💡 Improvements", "⚙️ Complexity", "📊 Score", "🔄 Before/After", "📜 History"]
         )
+
 
         # --- Bugs tab ---
         with tab_bugs:
             bugs = result.get("bugs", [])
+
             if not bugs:
                 st.success("No bugs found. Nice and clean! ✅")
             else:
                 for bug in bugs:
-                    with st.expander(f"Line {bug.get('line', 'N/A')} — {bug.get('severity', 'info').title()}"):
-                        st.markdown(format_bug_entry(bug))
+                    if isinstance(bug, dict):
+                        title = (
+                            f"Line {bug.get('line', 'N/A')} - "
+                            f"{bug.get('severity', 'info').title()}"
+                        )
+                        content = format_bug_entry(bug)
+                    else:
+                        title = "Code Issue"
+                        content = str(bug)
+
+                    with st.expander(title):
+                        st.markdown(content)
+
 
         # --- Improvements tab ---
         with tab_improve:
@@ -164,6 +214,29 @@ if result:
                     st.code(improved, language=language.lower())
             else:
                 st.info("No improved version was returned.")
-else:
+        # --- Review History tab ---
+        with tab_history:
+            st.subheader("📜 Previous Code Reviews")
+
+            user = st.session_state.get("user")
+
+            if user:
+                history = get_user_history(user["id"])
+
+                if not history:
+                    st.info("No previous reviews found.")
+                else:
+                    for item in history:
+                        with st.expander(
+                            f"{item['language']} - {item['created_at']}"
+                        ):
+                            st.markdown("**Previous Code:**")
+                            st.code(item["code"])
+
+                            st.markdown("**Review Result:**")
+                            st.code(item["review_result"], language="json")
+            else:
+                st.warning("Please login to view history.")
+
     st.markdown("---")
     st.caption("Paste your code above and click **Review My Code** to get started.")
