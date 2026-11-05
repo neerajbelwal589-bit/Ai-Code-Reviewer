@@ -1,0 +1,166 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+    --bg: #0b1730;
+    --bg-2: #12254a;
+    --panel: rgba(255, 255, 255, 0.05);
+    --border: rgba(255, 255, 255, 0.10);
+    --accent: #7c6cf6;
+    --accent-2: #a855f7;
+    --text: #e8edf7;
+    --muted: #93a1bd;
+}
+
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+h1, h2, h3, h4, h5 { font-family: 'Outfit', sans-serif !important; letter-spacing: -0.01em; }
+
+.stApp { background: linear-gradient(160deg, var(--bg) 0%, var(--bg-2) 100%); color: var(--text); }
+header[data-testid="stHeader"] { background: transparent; }
+.block-container { max-width: 1100px; padding-top: 2rem; }
+
+/* ---------- Header ---------- */
+.hero { padding: 0.5rem 0 1.5rem 0; text-align: left; }
+.hero h1 { font-size: 2.6rem; margin: 0; color: #fff; }
+.hero p { color: var(--muted); margin: 0.4rem 0 0 0; font-size: 1.05rem; max-width: 60ch; }
+
+/* ---------- Sidebar ---------- */
+[data-testid="stSidebar"] { background: #0a1429; border-right: 1px solid var(--border); }
+.profile-card {
+    display: flex; gap: 12px; align-items: center;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 12px 14px; margin-bottom: 1.2rem;
+}
+.avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Outfit', sans-serif; font-weight: 700; color: #fff; flex-shrink: 0;
+}
+.profile-name { font-weight: 600; color: #fff; line-height: 1.2; }
+.profile-email { font-size: 0.78rem; color: var(--muted); word-break: break-all; }
+
+/* ---------- Buttons ---------- */
+.stButton > button, .stDownloadButton > button {
+    border-radius: 10px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); font-weight: 500;
+    transition: border-color .15s, background .15s;
+}
+.stButton > button:hover, .stDownloadButton > button:hover { border-color: var(--accent); color: #fff; }
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border: none; color: #fff; font-weight: 600;
+}
+.stButton > button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* ---------- Tabs ---------- */
+.stTabs [data-baseweb="tab-list"] { gap: 6px; border-bottom: 1px solid var(--border); }
+.stTabs [data-baseweb="tab"] { border-radius: 8px 8px 0 0; padding: 8px 16px; color: var(--muted); }
+.stTabs [aria-selected="true"] { color: #fff; }
+
+/* ---------- Metrics ---------- */
+[data-testid="stMetric"] {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px 16px;
+}
+[data-testid="stMetricLabel"] { color: var(--muted); }
+
+/* ---------- Expanders ---------- */
+[data-testid="stExpander"] {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+}
+
+/* ---------- Editor ---------- */
+iframe[title="streamlit_ace.st_ace"] { border-radius: 12px; border: 1px solid var(--border); }
+
+/* ---------- Empty state ---------- */
+.empty-state {
+    margin-top: 1.5rem; padding: 2rem; text-align: center;
+    border: 1px dashed var(--border); border-radius: 14px; color: var(--muted);
+}
+.empty-state b { color: var(--text); }
+
+/* ---------- Dashboard ---------- */
+.dash { margin: 0.5rem 0 1.5rem 0; }
+.dash-head { display: flex; align-items: center; gap: 22px; margin-bottom: 1.2rem; }
+.score-ring {
+    width: 112px; height: 112px; border-radius: 50%; flex-shrink: 0;
+    background: conic-gradient(var(--c) calc(var(--pct) * 1%), rgba(255,255,255,0.10) 0);
+    display: flex; align-items: center; justify-content: center;
+}
+.score-inner {
+    width: 90px; height: 90px; border-radius: 50%; background: #0d1b38;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.score-num { font-family: 'Outfit', sans-serif; font-size: 2.1rem; font-weight: 700; color: #fff; line-height: 1; }
+.score-of { font-size: 0.78rem; color: var(--muted); }
+.dash-head-text h2 { margin: 0; font-size: 1.9rem; color: #fff; }
+.dash-head-text p { margin: 0.25rem 0 0 0; color: var(--muted); }
+
+.cat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-bottom: 1.2rem; }
+.cat { background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--c); border-radius: 10px; padding: 12px 16px; }
+.cat-row { display: flex; justify-content: space-between; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+.cat-row span:last-child { color: var(--muted); font-size: 0.85rem; }
+.bar { height: 6px; border-radius: 99px; background: rgba(255,255,255,0.10); overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 99px; background: var(--c); }
+
+.summary-card { background: rgba(124,108,246,0.10); border: 1px solid rgba(124,108,246,0.30); border-radius: 12px; padding: 16px 20px; margin-bottom: 1.2rem; }
+.summary-card h4 { margin: 0 0 6px 0; color: #b8b0ff; }
+.summary-card p { margin: 0; color: var(--text); line-height: 1.6; }
+
+.issues-title { margin: 0.4rem 0 0.6rem 0; color: #fff; }
+.issue { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.30); border-left: 3px solid #f87171; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; }
+.issue-title { font-weight: 600; color: #fecaca; margin-bottom: 4px; }
+.issue-desc { color: var(--text); line-height: 1.55; }
+.issue.ok { background: rgba(52,211,153,0.08); border-color: rgba(52,211,153,0.30); border-left-color: #34d399; color: #a7f3d0; }
+/* ===== Results dashboard (matches reference design) ===== */
+.rv-wrap { margin-top: 4px; }
+
+.rv-head { display: flex; align-items: center; gap: 22px; padding: 6px 4px 18px; }
+.rv-score {
+  width: 104px; height: 104px; flex: 0 0 104px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: #0f172a; border-radius: 18px; border-left: 7px solid var(--c);
+  box-shadow: 0 0 0 1px rgba(148,163,184,.12), 0 8px 24px rgba(0,0,0,.35);
+}
+.rv-score-num { font-size: 2.8rem; font-weight: 800; line-height: 1; color: var(--c); }
+.rv-score-of  { font-size: .9rem; color: #94a3b8; margin-top: 4px; }
+.rv-head-text h2 { margin: 0; padding: 0; font-size: 2.1rem; font-weight: 800; color: #fff; }
+.rv-head-text p  { margin: 6px 0 0; color: #94a3b8; font-size: .95rem; }
+
+.rv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+.rv-cat {
+  background: rgba(15,23,42,.75); border: 1px solid rgba(148,163,184,.10);
+  border-left: 4px solid var(--c); border-radius: 10px; padding: 14px 16px;
+}
+.rv-cat-row { display: flex; justify-content: space-between; font-size: .92rem; font-weight: 700; color: #e2e8f0; margin-bottom: 10px; }
+.rv-cat-row span:last-child { font-size: .8rem; color: #cbd5e1; }
+.rv-bar { height: 6px; border-radius: 99px; background: rgba(148,163,184,.18); overflow: hidden; }
+.rv-bar-fill { height: 100%; border-radius: 99px; background: var(--c); }
+
+.rv-summary {
+  background: rgba(79,70,229,.16); border: 1px solid rgba(129,140,248,.25);
+  border-radius: 14px; padding: 16px 20px; margin-bottom: 8px;
+}
+.rv-summary-top { display: flex; justify-content: space-between; align-items: center; }
+.rv-summary h4 { margin: 0; padding: 0; display: flex; align-items: center; gap: 10px; color: #818cf8; font-size: 1.25rem; font-weight: 700; }
+.rv-spark { color: #a5b4fc; opacity: .8; }
+.rv-summary p { margin: 10px 0 0; color: #e2e8f0; line-height: 1.6; font-size: .98rem; }
+
+.rv-title { margin: 22px 0 10px; font-size: .8rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #f87171; }
+.rv-issue {
+  background: rgba(248,113,113,.08); border: 1px solid rgba(248,113,113,.25);
+  border-left: 4px solid #f87171; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px;
+}
+.rv-issue-title { font-weight: 700; color: #fecaca; margin-bottom: 4px; }
+.rv-issue-desc  { color: #e2e8f0; line-height: 1.55; }
+.rv-issue.rv-ok { background: rgba(52,211,153,.08); border-color: rgba(52,211,153,.3); border-left-color: #34d399; color: #a7f3d0; }
+
+@media (max-width: 760px) { .rv-grid { grid-template-columns: 1fr; } }
+
+/* ===== Buttons: no cut-off text, flatter look ===== */
+.stButton > button, .stDownloadButton > button { border-radius: 8px; white-space: nowrap; }
+.stButton > button p, .stDownloadButton > button p { white-space: nowrap; overflow: visible; text-overflow: clip; font-size: .9rem; }
+
+/* ===== Tabs: smaller so all fit without the scroll arrow ===== */
+button[data-baseweb="tab"] { padding: 8px 10px; }
+button[data-baseweb="tab"] p { font-size: .88rem; }
