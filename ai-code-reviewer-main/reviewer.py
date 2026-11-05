@@ -1,4 +1,5 @@
 import os
+import ast
 import hashlib
 from dotenv import load_dotenv
 
@@ -15,9 +16,13 @@ MODELS = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
 # Same code dobara aaye to API call nahi hogi
 _cache = {}
 
+# Prompt/logic badalne par isko badlo, taaki purana cache use na ho
+PROMPT_VERSION = "v3"
+print(f"[reviewer] loaded, PROMPT_VERSION={PROMPT_VERSION}")  # terminal me dikhna chahiye
+
 
 def _key(code, language, kind):
-    return hashlib.md5(f"{kind}|{language}|{code}".encode()).hexdigest()
+    return hashlib.md5(f"{PROMPT_VERSION}|{kind}|{language}|{code}".encode()).hexdigest()
 
 
 SYSTEM_PROMPT = """
@@ -79,23 +84,42 @@ Rules for changes:
 - If nothing was wrong, return an empty list.
 
 Rules for optimization (VERY IMPORTANT):
-- Decide if the code is correct but SLOWER than the standard better approach
-  (example: brute force nested loops O(n^2) where a hash map gives O(n)).
+- Decide if the code is correct but SLOWER or less idiomatic than the standard
+  better approach. Examples:
+  * nested loops O(n^2) where a hash map gives O(n)
+  * building a string with += inside a loop (use the simplest built-in or
+    slicing; use list + "".join() only if nothing simpler fits)
+  * re-implementing a built-in by hand (reversed, sum, max, min, sorted,
+    slicing like s[::-1]) with a manual loop
+- Building a string with += in a loop counts as can_be_optimized, even if the
+  Big-O looks the same, because each += may copy the whole string again.
+- A hand-written loop that a single built-in or slice can replace counts as
+  can_be_optimized.
 - If a clearly better approach exists: status = "can_be_optimized", fill
   current_time/current_space (Big-O of the user's code) and best_time/best_space
   (Big-O of your optimized version), and write optimized_code.
-- If the code is already efficient (or only tiny micro-optimizations exist):
-  status = "optimal", best_* same as current_*, optimized_code = "".
-- explanation: 3 to 5 short sentences for a beginner. Say what is slow, then
-  explain the faster idea with a simple everyday example. No jargon without
-  explaining it.
-- optimized_code: keep the SAME function name and parameters, keep it simple,
-  and add a short comment on each important line explaining what it does.
-  It must be complete and runnable.
+- Only use status = "optimal" if NO built-in, idiomatic, or lower-complexity
+  version exists. Then best_* same as current_*, optimized_code = "".
+- explanation: only 2 to 3 VERY short sentences for a beginner. Say what is
+  slow, then what the simpler way is. No jargon, no Big-O words here.
+- optimized_code (VERY IMPORTANT, the reader is a BEGINNER):
+  * Use the SIMPLEST possible fix. Prefer ONE built-in or slice over a longer
+    loop (example: return s[::-1] instead of a loop + list + join).
+  * Keep the SAME function name and parameters.
+  * Make it as SHORT as possible: ideally 1 to 4 lines inside the function.
+  * Do NOT add extra variables, helper lists or extra steps if a one-line
+    version exists.
+  * Add at most ONE short comment (max 8 words) in the whole code. Do NOT
+    comment every line. Never write "# FIXED:" comments here.
+  * Do NOT use advanced features (no generators, lambdas, comprehensions,
+    type hints, imports) unless the original code already uses them.
+  * It must be complete and runnable, and keep the original print/test lines.
 - improved_code stays the small safe cleanup/fix. Do NOT put the optimized
   approach inside improved_code.
 - The "summary" must clearly say if the code is correct but can be optimized.
 - Do not give the top score (9-10) to correct code that can be optimized.
+- If you list anything in "improvements" about speed or efficiency, then
+  optimization.status MUST be "can_be_optimized".
 
 Rules for category_scores:
 - Each value is an integer from 0 to 100 for that quality area.
@@ -149,7 +173,45 @@ def friendly_error(e):
     return f"Gemini API Error: {msg}"
 
 
-def build_user_prompt(code, language, syntax_bugs=None):
+# ---------------------------------------------------------------------------
+# Extra static check: string += inside loop (Python only)
+# ---------------------------------------------------------------------------
+def find_string_concat_in_loop(code):
+    """Return line numbers where a str variable is built with += inside a loop."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return []
+
+    hits = []
+    str_vars = set()
+
+    # variables initialised with a string literal, e.g. result = ""
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Assign)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        ):
+            for t in node.targets:
+                if isinstance(t, ast.Name):
+                    str_vars.add(t.id)
+
+    # += on those variables inside for / while
+    for loop in ast.walk(tree):
+        if isinstance(loop, (ast.For, ast.While)):
+            for node in ast.walk(loop):
+                if (
+                    isinstance(node, ast.AugAssign)
+                    and isinstance(node.op, ast.Add)
+                    and isinstance(node.target, ast.Name)
+                    and node.target.id in str_vars
+                ):
+                    hits.append(node.lineno)
+    return sorted(set(hits))
+
+
+def build_user_prompt(code, language, syntax_bugs=None, hints=None):
     syntax_note = ""
     if syntax_bugs:
         lines = []
@@ -163,9 +225,20 @@ def build_user_prompt(code, language, syntax_bugs=None):
             "and list each fix in changes:\n" + "\n".join(lines) + "\n"
         )
 
+    hint_note = ""
+    if hints:
+        hint_note = (
+            "\nStatic analysis found these performance issues. Treat them as real: "
+            "set optimization.status = can_be_optimized and write optimized_code. "
+            "Keep optimized_code VERY short and beginner-simple (prefer a one-line "
+            "built-in or slice, at most one comment):\n"
+            + "\n".join(f"- {h}" for h in hints)
+            + "\n"
+        )
+
     return f"""
 Review this {language} code.
-{syntax_note}
+{syntax_note}{hint_note}
 Code:
 
 ```{language.lower()}
@@ -173,6 +246,123 @@ Code:
 ```
 
 Return your review strictly as the JSON schema described in your instructions."""
+
+
+# ---------------------------------------------------------------------------
+# Output ko normalize karna (model ki galtiyan code me theek karo)
+# ---------------------------------------------------------------------------
+def _to_int(v, default=0):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return default
+
+
+def normalize_result(result, hints):
+    # a) overall score = category scores ka average (0-100 -> 0-10 scale)
+    cats = result.get("category_scores") or {}
+    vals = [max(0, min(100, _to_int(v))) for v in cats.values()]
+    if vals:
+        result["overall_score"] = round(sum(vals) / len(vals) / 10)
+    else:
+        result["overall_score"] = max(0, min(10, _to_int(result.get("overall_score"))))
+
+    opt = result.get("optimization")
+    if not isinstance(opt, dict):
+        opt = {}
+
+    # b) static hint mila hai but model "optimal" bola -> override
+    if hints and opt.get("status") != "can_be_optimized":
+        opt["status"] = "can_be_optimized"
+        if not opt.get("explanation"):
+            opt["explanation"] = hints[0]
+
+    # c) can_be_optimized hai to top score nahi + improvement entry zaroor ho
+    if opt.get("status") == "can_be_optimized":
+        result["overall_score"] = min(result["overall_score"], 8)
+        if not result.get("improvements"):
+            result["improvements"] = [
+                {
+                    "title": "Can be optimized",
+                    "detail": opt.get(
+                        "explanation", "A faster or cleaner approach exists."
+                    ),
+                }
+            ]
+    else:
+        opt["optimized_code"] = ""
+
+    result["optimization"] = opt
+
+    # d) improvements hain to score 10 nahi
+    if result.get("improvements"):
+        result["overall_score"] = min(result["overall_score"], 9)
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Safety net: optimized_code ko code me simple banao (model na maane tab bhi)
+# ---------------------------------------------------------------------------
+SIMPLIFY_PROMPT = """
+You make code SHORTER and SIMPLER for a complete beginner.
+Return ONLY the code. No markdown, no ``` fences, no explanation.
+
+Rules:
+- Keep the same function name and parameters.
+- Use ONE built-in or slice instead of a loop whenever possible
+  (example: return s[::-1] instead of a loop).
+- Keep the original print/test lines.
+- No extra variables, no helper lists, no imports.
+- At most ONE short comment (max 8 words) in the whole code.
+- Never write "# FIXED".
+"""
+
+
+def _code_lines(code):
+    """Non-empty lines that are not pure comments."""
+    return [
+        ln for ln in (code or "").splitlines()
+        if ln.strip() and not ln.strip().startswith("#")
+    ]
+
+
+def clean_optimized_code(code):
+    """Remove '# FIXED' notes and keep at most ONE full-line comment."""
+    import re
+
+    code = (code or "").strip()
+    # ``` fences hata do agar model ne laga diye
+    code = re.sub(r"^```[a-zA-Z]*\n?", "", code)
+    code = re.sub(r"\n?```$", "", code)
+
+    out = []
+    comments = 0
+    for ln in code.splitlines():
+        s = ln.strip()
+        if s.startswith("#"):
+            if "FIXED" in s or comments >= 1:
+                continue
+            comments += 1
+            out.append(ln)
+        else:
+            # inline "# FIXED: ..." hata do
+            out.append(re.sub(r"\s+#\s*FIXED.*$", "", ln))
+    return "\n".join(out).strip()
+
+
+def simplify_optimized(code, optimized, language):
+    """Ek aur chhota Gemini call: lambe optimized code ko simple karo."""
+    try:
+        response = call_gemini(
+            f"Original {language} code:\n{code}\n\n"
+            f"Optimized version (too long):\n{optimized}\n\n"
+            "Rewrite the optimized version as short and simple as possible.",
+            {"system_instruction": SIMPLIFY_PROMPT, "temperature": 0.1},
+        )
+        return clean_optimized_code(response.text)
+    except Exception:
+        return optimized
 
 
 def review_code(code, language):
@@ -201,10 +391,19 @@ def review_code(code, language):
     # 2) Static analysis only makes sense on code that parses
     static_bugs = [] if has_syntax_error else analyze_static(code, language)
 
+    # 2b) Performance hints (string += in loop)
+    hints = []
+    if language.lower() == "python" and not has_syntax_error:
+        for ln in find_string_concat_in_loop(code):
+            hints.append(
+                f"Line {ln}: string built with += inside a loop "
+                f"(use the simplest built-in or slicing instead)"
+            )
+
     # 3) Gemini review (also fixes syntax errors)
     try:
         response = call_gemini(
-            build_user_prompt(code, language, syntax_bugs),
+            build_user_prompt(code, language, syntax_bugs, hints),
             {
                 "system_instruction": SYSTEM_PROMPT,
                 "temperature": 0.2,
@@ -239,8 +438,17 @@ def review_code(code, language):
     # 4) Merge everything
     result["bugs"] = syntax_bugs + static_bugs + result.get("bugs", [])
     result.setdefault("changes", [])
-    if not isinstance(result.get("optimization"), dict):
-        result["optimization"] = {}
+
+    # 4b) Model ke output ko consistent banao (score, optimization, improvements)
+    result = normalize_result(result, hints)
+
+    # 4c) optimized_code ko simple rakho (comments saaf, lamba ho to chhota karwao)
+    opt = result.get("optimization", {})
+    if opt.get("status") == "can_be_optimized" and opt.get("optimized_code"):
+        cleaned = clean_optimized_code(opt["optimized_code"])
+        if len(_code_lines(cleaned)) > len(_code_lines(code)):
+            cleaned = simplify_optimized(code, cleaned, language)
+        opt["optimized_code"] = cleaned
 
     if has_syntax_error:
         result["overall_score"] = min(result.get("overall_score", 3), 3)
